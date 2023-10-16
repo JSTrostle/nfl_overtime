@@ -1,0 +1,42 @@
+Overtime in the NFL is strange. It takes several if-then statements to even describe it. If the first team to possess the ball scores a touchdown, they win. If they score a field goal on the first drive and the opponent doesn't score on the next drive, the first team wins. If the first team doesn't score, and the opponent scores a field goal or touchdown, then the opponent wins. If neither team scores or both teams score fields goals, then the game becomes sudden death overtime. This is the simple version. Either team can win on a defensive score, including a safety, and a team can lose to a field goal without ever possessing the ball after an onside kick. NFL overtime is strange.
+
+Modeling NFL overtime, then, is complicated. I'm going to ignore defensive scores and onside kicks. I'm going to pretend those happen are not normal. Let's go in.
+
+Let x be the probability of a touchdown on a given drive. Let y be the probablity of a field goal. Let z be the probability of there being no score on the drive. Finally, since I'm pretending that defensive scores don't happen, let x + y + z = 1. Let team A be the team who first gets the ball, and team B be the team who gets the ball second. The probability the game ends in the first round is the probability that team A gets a touchdown. So that's x. The probability that the game ends in the second round is the probability that team A got a field goal and team B gets a touchdown plus the probability that team A didn't score and team B scored a field goal plus the probability that team A didn't score and team B scored a touchdown plus the probability that team A scored a field goal and team B didn't score, yz + xy + zy + zx.
+
+For round three... well now it's sudden-death overtime, next score wins. That makes the math different. Adding up separate possibilities is easy, but sudden death, despite its name, can theoretically last forever. If neither team scores, it's round after round after round of overtime, for infinity. Which implies that the solution is that old bugaboo: sequences and series. A good ol' fashioned sudden death overtime has a probability of ending in the first round of x + y. The probability of ending in the second round is (x + y) times the probability of even getting to the second round, z (why z? because z = 1 - (x + y)). The probability of ending in the third round? (x+y) * z * z. The pattern is not too hard. (x + y) * the sum, from n = 1 to infinity, of z to the power of n. That's fine and dandy, but it's better to split it out to odd and even rounds so we can work out the win probability of each team. So it's actually two sums added together. The sum for team A is (x + y) * the sum, from n = 1 to infinity, of z to the power of (2n - 1) and the sum for team B is (x + y) * the sum, from n = 1 to infinity, of z to the power of 2n. These sums both converge (hallelujah) to (x + y) / (1 - z^2) and (-z(x+y)) / (z^2 - 1). So the complete overtime is x + yz + xy + zy + zx + (1 - (yz + xy + zy + zx)) * ((x + y) / (1 - z^2) + (-z(x+y)) / (z^2 - 1)).
+
+That means team A has a win probability of x + yz + (1 - (x + yz + xy+zy + zx)) * ((x+y) / (1 - z^2)) and that team B has a win probability of xy + zy + zx + (1 - (x + yz + xy + zy + zx)) * (-z(x + y) / (z^2 - 1)) [or just 1 minus the thing above]. 
+
+```{r}
+library(nflreadr)
+library(tidyverse)
+
+load_pbp(2022) -> pbp3
+
+pbp3 |> 
+  select(game_id, contains("drive")) -> pbp4
+
+pbp4 |> 
+  distinct(game_id, drive, .keep_all = T) |> 
+  count(fixed_drive_result) -> pbp5
+
+pbp5 |> 
+  rename(count = n) |> 
+  mutate(total_drives = sum(count),
+         prop = count/total_drives,
+         prop_readable = round(prop, 2)) -> pbp6
+
+TD <- 0.21
+FG <- 0.15 + 0.21 #assuming if  you get into TD range you're also in FG range
+no_score <- 1 - (TD + FG)
+
+x + y*z + x*y+z*y + z*x + (1 - (x + y*z + x*y+z*y + z*x)) * (((x+y) / (1 - z^2)) + -z*(x+y) / (z^2 - 1))
+#It's unbelievably satisfying that this sums to 1. 
+#Combines game theory, probability theory, algebra, and sequences and series
+
+x + y*z + (1 - (x + y*z + x*y+z*y + z*x)) * ((x+y) / (1 - z^2)) #team A
+
+x*y+z*y + z*x + (1 - (x + y*z + x*y+z*y + z*x)) * (-z*(x+y) / (z^2 - 1))# Team B
+```
+
